@@ -19,6 +19,7 @@
 
 package com.dlink.gateway.yarn;
 
+import cn.hutool.json.JSONObject;
 import com.dlink.assertion.Asserts;
 import com.dlink.gateway.AbstractGateway;
 import com.dlink.gateway.config.ActionType;
@@ -31,6 +32,7 @@ import com.dlink.gateway.result.TestResult;
 import com.dlink.model.JobStatus;
 import com.dlink.utils.FlinkUtil;
 import com.dlink.utils.LogUtil;
+
 
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.client.deployment.ClusterRetrieveException;
@@ -71,7 +73,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
-
 /**
  * YarnSubmiter
  *
@@ -97,11 +98,61 @@ public abstract class YarnGateway extends AbstractGateway {
         initYarnClient();
     }
 
+    public void initdcqc(String queuename) {
+        initConfigdcqc(queuename);
+        initYarnClient();
+    }
+
     private void initConfig() {
         configuration = GlobalConfiguration.loadConfiguration(config.getClusterConfig().getFlinkConfigPath());
         if (Asserts.isNotNull(config.getFlinkConfig().getConfiguration())) {
             addConfigParas(config.getFlinkConfig().getConfiguration());
         }
+        configuration.set(DeploymentOptions.TARGET, getType().getLongValue());
+        if (Asserts.isNotNullString(config.getFlinkConfig().getSavePoint())) {
+            configuration.setString(SavepointConfigOptions.SAVEPOINT_PATH, config.getFlinkConfig().getSavePoint());
+        }
+        configuration.set(YarnConfigOptions.PROVIDED_LIB_DIRS,
+                Collections.singletonList(config.getClusterConfig().getFlinkLibPath()));
+        if (Asserts.isNotNullString(config.getFlinkConfig().getJobName())) {
+            configuration.set(YarnConfigOptions.APPLICATION_NAME, config.getFlinkConfig().getJobName());
+        }
+
+        if (Asserts.isNotNullString(config.getClusterConfig().getYarnConfigPath())) {
+            configuration.setString(HADOOP_CONFIG, config.getClusterConfig().getYarnConfigPath());
+        }
+
+        if (configuration.containsKey(SecurityOptions.KERBEROS_LOGIN_KEYTAB.key())) {
+            try {
+                SecurityUtils.install(new SecurityConfiguration(configuration));
+                UserGroupInformation currentUser = UserGroupInformation.getCurrentUser();
+                logger.info("安全认证结束，用户和认证方式:" + currentUser.toString());
+            } catch (Exception e) {
+                logger.error(e.getMessage());
+                e.printStackTrace();
+            }
+        }
+        if (getType().isApplicationMode()) {
+            configuration.set(YarnConfigOptions.APPLICATION_TYPE, "Dinky Flink");
+            String uuid = UUID.randomUUID().toString().replace("-", "");
+            if (configuration.contains(CheckpointingOptions.CHECKPOINTS_DIRECTORY)) {
+                configuration.set(CheckpointingOptions.CHECKPOINTS_DIRECTORY,
+                        configuration.getString(CheckpointingOptions.CHECKPOINTS_DIRECTORY) + "/" + uuid);
+            }
+            if (configuration.contains(CheckpointingOptions.SAVEPOINT_DIRECTORY)) {
+                configuration.set(CheckpointingOptions.SAVEPOINT_DIRECTORY,
+                        configuration.getString(CheckpointingOptions.SAVEPOINT_DIRECTORY) + "/" + uuid);
+            }
+        }
+        YarnLogConfigUtil.setLogConfigFileInConfig(configuration, config.getClusterConfig().getFlinkConfigPath());
+    }
+
+    private void initConfigdcqc(String queuename) {
+        configuration = GlobalConfiguration.loadConfiguration(config.getClusterConfig().getFlinkConfigPath());
+        if (Asserts.isNotNull(config.getFlinkConfig().getConfiguration())) {
+            addConfigParas(config.getFlinkConfig().getConfiguration());
+        }
+        configuration.set(YarnConfigOptions.APPLICATION_QUEUE,queuename);
         configuration.set(DeploymentOptions.TARGET, getType().getLongValue());
         if (Asserts.isNotNullString(config.getFlinkConfig().getSavePoint())) {
             configuration.setString(SavepointConfigOptions.SAVEPOINT_PATH, config.getFlinkConfig().getSavePoint());

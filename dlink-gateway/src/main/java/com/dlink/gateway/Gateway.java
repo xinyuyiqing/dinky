@@ -72,6 +72,8 @@ public interface Gateway {
 
     GatewayResult submitJobGraph(JobGraph jobGraph);
 
+    GatewayResult submitJobGraphdcqc(JobGraph jobGraph,String queuename);
+
     GatewayResult submitJar();
 
     SavePointResult savepointCluster();

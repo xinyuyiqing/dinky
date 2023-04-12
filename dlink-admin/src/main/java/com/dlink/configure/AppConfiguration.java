@@ -73,6 +73,7 @@ public class AppConfiguration implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 .excludePathPatterns("/api/login")
                 .excludePathPatterns("/api/geTenants")
+                .excludePathPatterns("/api/login/dcqc")
                 .excludePathPatterns("/openapi/**");
 
         registry.addInterceptor(new TenantInterceptor())

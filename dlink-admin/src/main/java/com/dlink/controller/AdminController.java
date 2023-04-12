@@ -19,6 +19,7 @@
 
 package com.dlink.controller;
 
+import com.alibaba.fastjson.JSONObject;
 import com.dlink.assertion.Asserts;
 import com.dlink.common.result.Result;
 import com.dlink.dto.LoginUTO;
@@ -49,6 +50,18 @@ public class AdminController {
 
     @Autowired
     private UserService userService;
+
+
+
+    /**
+     * dcqc登录
+     */
+    @PostMapping("/login/dcqc")
+    public Result dcqclogin(@RequestBody JSONObject token) {
+        return userService.dcqcloginUser(token);
+    }
+
+
 
     /**
      * 登录

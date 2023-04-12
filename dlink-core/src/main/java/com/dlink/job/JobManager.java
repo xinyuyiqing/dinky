@@ -109,6 +109,11 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * JobManager
@@ -610,6 +615,211 @@ public class JobManager {
         return job.getJobResult();
     }
 
+    public JobResult executeSqldcqc(String statement,String queuename) {
+        initClassLoader(config);
+        ProcessEntity process = ProcessContextHolder.getProcess();
+        Job job = Job.init(runMode, config, executorSetting, executor, statement, useGateway);
+        if (!useGateway) {
+            job.setJobManagerAddress(environmentSetting.getAddress());
+        }
+        JobContextHolder.setJob(job);
+        ready();
+        String currentSql = "";
+        JobParam jobParam = Explainer.build(executor, useStatementSet, sqlSeparator)
+                .pretreatStatements(SqlUtil.getStatements(statement, sqlSeparator));
+        try {
+            initUDF(jobParam.getUdfList(), runMode, config.getTaskId());
+
+            for (StatementParam item : jobParam.getDdl()) {
+                currentSql = item.getValue();
+                executor.executeSql(item.getValue());
+            }
+            if (jobParam.getTrans().size() > 0) {
+                // Use statement set or gateway only submit inserts.
+                if (useStatementSet && useGateway) {
+                    List<String> inserts = new ArrayList<>();
+                    for (StatementParam item : jobParam.getTrans()) {
+                        inserts.add(item.getValue());
+                    }
+
+                    // Use statement set need to merge all insert sql into a sql.
+                    currentSql = String.join(sqlSeparator, inserts);
+                    GatewayResult gatewayResult = submitByGateway(inserts);
+                    // Use statement set only has one jid.
+                    job.setResult(InsertResult.success(gatewayResult.getAppId()));
+                    job.setJobId(gatewayResult.getAppId());
+                    job.setJids(gatewayResult.getJids());
+                    job.setJobManagerAddress(formatAddress(gatewayResult.getWebURL()));
+                    if (gatewayResult.isSucess()) {
+                        job.setStatus(Job.JobStatus.SUCCESS);
+                    } else {
+                        job.setStatus(Job.JobStatus.FAILED);
+                        job.setError(gatewayResult.getError());
+                    }
+                } else if (useStatementSet && !useGateway) {
+                    List<String> inserts = new ArrayList<>();
+                    for (StatementParam item : jobParam.getTrans()) {
+                        if (item.getType().isInsert()) {
+                            inserts.add(item.getValue());
+                        }
+                    }
+                    if (inserts.size() > 0) {
+                        currentSql = String.join(sqlSeparator, inserts);
+                        // Remote mode can get the table result.
+                        TableResult tableResult = executor.executeStatementSet(inserts);
+                        if (tableResult.getJobClient().isPresent()) {
+                            job.setJobId(tableResult.getJobClient().get().getJobID().toHexString());
+                            job.setJids(new ArrayList<String>() {
+
+                                {
+                                    add(job.getJobId());
+                                }
+                            });
+                        }
+                        if (config.isUseResult()) {
+                            // Build insert result.
+                            IResult result = ResultBuilder
+                                    .build(SqlType.INSERT, config.getMaxRowNum(), config.isUseChangeLog(),
+                                            config.isUseAutoCancel(), executor.getTimeZone())
+                                    .getResult(tableResult);
+                            job.setResult(result);
+                        }
+                    }
+                } else if (!useStatementSet && useGateway) {
+                    List<String> inserts = new ArrayList<>();
+                    for (StatementParam item : jobParam.getTrans()) {
+                        inserts.add(item.getValue());
+                        // Only can submit the first of insert sql, when not use statement set.
+                        break;
+                    }
+                    currentSql = String.join(sqlSeparator, inserts);
+                    GatewayResult gatewayResult = submitByGatewaydcqc(inserts,queuename);
+                    job.setResult(InsertResult.success(gatewayResult.getAppId()));
+                    job.setJobId(gatewayResult.getAppId());
+                    job.setJids(gatewayResult.getJids());
+                    job.setJobManagerAddress(formatAddress(gatewayResult.getWebURL()));
+                    if (gatewayResult.isSucess()) {
+                        job.setStatus(Job.JobStatus.SUCCESS);
+                    } else {
+                        job.setStatus(Job.JobStatus.FAILED);
+                        job.setError(gatewayResult.getError());
+                    }
+                } else {
+                    for (StatementParam item : jobParam.getTrans()) {
+                        currentSql = item.getValue();
+                        FlinkInterceptorResult flinkInterceptorResult = FlinkInterceptor.build(executor,
+                                item.getValue());
+                        if (Asserts.isNotNull(flinkInterceptorResult.getTableResult())) {
+                            if (config.isUseResult()) {
+                                IResult result = ResultBuilder
+                                        .build(item.getType(), config.getMaxRowNum(), config.isUseChangeLog(),
+                                                config.isUseAutoCancel(), executor.getTimeZone())
+                                        .getResult(flinkInterceptorResult.getTableResult());
+                                job.setResult(result);
+                            }
+                        } else {
+                            if (!flinkInterceptorResult.isNoExecute()) {
+                                TableResult tableResult = executor.executeSql(item.getValue());
+                                if (tableResult.getJobClient().isPresent()) {
+                                    job.setJobId(tableResult.getJobClient().get().getJobID().toHexString());
+                                    job.setJids(new ArrayList<String>() {
+
+                                        {
+                                            add(job.getJobId());
+                                        }
+                                    });
+                                }
+                                if (config.isUseResult()) {
+                                    IResult result = ResultBuilder.build(item.getType(), config.getMaxRowNum(),
+                                            config.isUseChangeLog(), config.isUseAutoCancel(),
+                                            executor.getTimeZone()).getResult(tableResult);
+                                    job.setResult(result);
+                                }
+                            }
+                        }
+                        // Only can submit the first of insert sql, when not use statement set.
+                        break;
+                    }
+                }
+            }
+            if (jobParam.getExecute().size() > 0) {
+                if (useGateway) {
+                    for (StatementParam item : jobParam.getExecute()) {
+                        executor.executeSql(item.getValue());
+                        if (!useStatementSet) {
+                            break;
+                        }
+                    }
+                    GatewayResult gatewayResult = null;
+                    config.addGatewayConfig(executor.getSetConfig());
+                    if (runMode.isApplicationMode()) {
+                        gatewayResult = Gateway.build(config.getGatewayConfig()).submitJar();
+                    } else {
+                        StreamGraph streamGraph = executor.getStreamGraph();
+                        streamGraph.setJobName(config.getJobName());
+                        JobGraph jobGraph = streamGraph.getJobGraph();
+                        if (Asserts.isNotNullString(config.getSavePointPath())) {
+                            jobGraph.setSavepointRestoreSettings(
+                                    SavepointRestoreSettings.forPath(config.getSavePointPath(), true));
+                        }
+                        gatewayResult = Gateway.build(config.getGatewayConfig()).submitJobGraphdcqc(jobGraph,queuename);
+                    }
+                    job.setResult(InsertResult.success(gatewayResult.getAppId()));
+                    job.setJobId(gatewayResult.getAppId());
+                    job.setJids(gatewayResult.getJids());
+                    job.setJobManagerAddress(formatAddress(gatewayResult.getWebURL()));
+                    if (gatewayResult.isSucess()) {
+                        job.setStatus(Job.JobStatus.SUCCESS);
+                    } else {
+                        job.setStatus(Job.JobStatus.FAILED);
+                        job.setError(gatewayResult.getError());
+                    }
+                } else {
+                    for (StatementParam item : jobParam.getExecute()) {
+                        executor.executeSql(item.getValue());
+                        if (!useStatementSet) {
+                            break;
+                        }
+                    }
+                    JobClient jobClient = executor.executeAsync(config.getJobName());
+                    if (Asserts.isNotNull(jobClient)) {
+                        job.setJobId(jobClient.getJobID().toHexString());
+                        job.setJids(new ArrayList<String>() {
+
+                            {
+                                add(job.getJobId());
+                            }
+                        });
+                    }
+                    if (config.isUseResult()) {
+                        IResult result = ResultBuilder
+                                .build(SqlType.EXECUTE, config.getMaxRowNum(), config.isUseChangeLog(),
+                                        config.isUseAutoCancel(), executor.getTimeZone())
+                                .getResult(null);
+                        job.setResult(result);
+                    }
+                }
+            }
+            job.setEndTime(LocalDateTime.now());
+            if (job.isFailed()) {
+                failed();
+            } else {
+                job.setStatus(Job.JobStatus.SUCCESS);
+                success();
+            }
+        } catch (Exception e) {
+            String error = LogUtil.getError("Exception in executing FlinkSQL:\n" + currentSql, e);
+            job.setEndTime(LocalDateTime.now());
+            job.setStatus(Job.JobStatus.FAILED);
+            job.setError(error);
+            process.error(error);
+            failed();
+        } finally {
+            close();
+        }
+        return job.getJobResult();
+    }
+
     private GatewayResult submitByGateway(List<String> inserts) {
         GatewayResult gatewayResult = null;
 
@@ -627,6 +837,27 @@ public class JobManager {
             }
             // Perjob mode need to submit job graph.
             gatewayResult = Gateway.build(config.getGatewayConfig()).submitJobGraph(jobGraph);
+        }
+        return gatewayResult;
+    }
+
+    private GatewayResult submitByGatewaydcqc(List<String> inserts,String queuename) {
+        GatewayResult gatewayResult = null;
+
+        // Use gateway need to build gateway config, include flink configeration.
+        config.addGatewayConfig(executor.getSetConfig());
+
+        if (runMode.isApplicationMode()) {
+            // Application mode need to submit dlink-app.jar that in the hdfs or image.
+            gatewayResult = Gateway.build(config.getGatewayConfig()).submitJar();
+        } else {
+            JobGraph jobGraph = executor.getJobGraphFromInserts(inserts);
+            // Perjob mode need to set savepoint restore path, when recovery from savepoint.
+            if (Asserts.isNotNullString(config.getSavePointPath())) {
+                jobGraph.setSavepointRestoreSettings(SavepointRestoreSettings.forPath(config.getSavePointPath(), true));
+            }
+            // Perjob mode need to submit job graph.
+            gatewayResult = Gateway.build(config.getGatewayConfig()).submitJobGraphdcqc(jobGraph,queuename);
         }
         return gatewayResult;
     }

@@ -19,6 +19,10 @@
 
 package com.dlink.service.impl;
 
+import cn.dev33.satoken.secure.SaSecureUtil;
+import cn.dev33.satoken.stp.StpUtil;
+import com.alibaba.fastjson.JSONObject;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.dlink.assertion.Asserts;
 import com.dlink.common.result.Result;
 import com.dlink.context.TenantContextHolder;
@@ -26,36 +30,21 @@ import com.dlink.db.service.impl.SuperServiceImpl;
 import com.dlink.dto.LoginUTO;
 import com.dlink.dto.UserDTO;
 import com.dlink.mapper.UserMapper;
-import com.dlink.model.Role;
-import com.dlink.model.RoleSelectPermissions;
-import com.dlink.model.Tenant;
-import com.dlink.model.User;
-import com.dlink.model.UserRole;
-import com.dlink.model.UserTenant;
-import com.dlink.service.RoleSelectPermissionsService;
-import com.dlink.service.RoleService;
-import com.dlink.service.TenantService;
-import com.dlink.service.UserRoleService;
-import com.dlink.service.UserService;
-import com.dlink.service.UserTenantService;
+import com.dlink.model.*;
+import com.dlink.service.*;
+import com.dlink.utils.JwtTokenUtils;
 import com.dlink.utils.MessageResolverUtils;
-
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.fasterxml.jackson.databind.JsonNode;
+import java.util.*;
+import java.util.stream.Collectors;
 
-import cn.dev33.satoken.secure.SaSecureUtil;
-import cn.dev33.satoken.stp.StpUtil;
 
 /**
  * UserServiceImpl
@@ -82,6 +71,9 @@ public class UserServiceImpl extends SuperServiceImpl<UserMapper, User> implemen
 
     @Autowired
     private RoleSelectPermissionsService roleSelectPermissionsService;
+
+    @Autowired
+    private TenantServiceImpl tenantServiceImpl;
 
     @Override
     public Result registerUser(User user) {
@@ -164,6 +156,72 @@ public class UserServiceImpl extends SuperServiceImpl<UserMapper, User> implemen
         } else {
             return Result.failed(MessageResolverUtils.getMessage("login.fail"));
         }
+    }
+
+    //集成大数据平台的登录接口
+    @Override
+    public Result dcqcloginUser(JSONObject token) {
+        String Username = JwtTokenUtils.getUsername(token.get("token").toString());
+        String WORKSPACE_ID = JwtTokenUtils.getWORKSPACE_ID(token.get("token").toString());
+        String WORKSPACE_NAME = JwtTokenUtils.getWORKSPACE_NAME(token.get("token").toString());
+        User user = getUserByUsername(Username);
+
+        //如果用户不存在则新建
+        if (Asserts.isNull(user)) {
+            User newuser = new User();
+            newuser.setUsername(Username);
+            registerUser(newuser);
+            user = getUserByUsername(Username);
+        }
+
+        //新建或者修改工作空间
+        Tenant tenant = new Tenant();
+        tenant.setTenantCode(WORKSPACE_NAME);
+        tenant.setNote(WORKSPACE_ID);
+        tenantService.saveOrUpdateTenant(tenant);
+
+        //获取空间已分配的用户
+        Tenant tenantByTenantCode = tenantServiceImpl.getTenantByTenantCode(tenant.getTenantCode());
+        int tenantId = tenantByTenantCode.getId();
+        List<UserTenant> userTenants = userTenantService.getBaseMapper().selectList(new QueryWrapper<UserTenant>().eq("tenant_id", tenantId));
+        List<Integer> userIds = new ArrayList<>();
+        for (UserTenant userTenant : userTenants) {
+            userIds.add(userTenant.getUserId());
+        }
+
+        //判断登陆用户在空间里没，不存在就加上
+        if (userIds.contains(user.getId())) {
+
+        } else {
+            userIds.add(user.getId());
+            ObjectMapper objectMapper = new ObjectMapper();
+            ObjectNode parentNode = objectMapper.createObjectNode();
+            parentNode.put("tenantId", tenantId);
+            parentNode.putPOJO("users", userIds);
+            String json;
+            JsonNode jsonNode;
+            try {
+                json = objectMapper.writeValueAsString(parentNode);
+                jsonNode = objectMapper.readTree(json);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
+            }
+
+            //分配用户到对应的工作空间
+            tenantService.distributeUsers(jsonNode);
+        }
+
+        // 将前端入参 租户id 放入上下文
+        TenantContextHolder.set(tenantId);
+        LoginUTO loginUTO = new LoginUTO();
+        loginUTO.setUsername(Username);
+        loginUTO.setTenantId(tenantId);
+
+        // get user tenants and roles
+        UserDTO userDTO = getUserALLBaseInfo(loginUTO, user);
+        StpUtil.login(user.getId(), loginUTO.isAutoLogin());
+        StpUtil.getSession().set("user", userDTO);
+        return Result.succeed(userDTO, MessageResolverUtils.getMessage("login.success"));
     }
 
     private UserDTO getUserALLBaseInfo(LoginUTO loginUTO, User user) {

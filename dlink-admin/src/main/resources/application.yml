@@ -1,8 +1,13 @@
+zwdd:
+  appkey: glz-hO8Z9q068KIi9rg3Hkl4NbQzIb
+  appsecret: AqL35oaVoV3SyW815ky0t0K23oU004umAD5le1LI
+  domainName: zd-openplatform.bigdatacq.com
+
 spring:
   datasource:
-    url: jdbc:mysql://${MYSQL_ADDR:127.0.0.1:3306}/${MYSQL_DATABASE:dlink}?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&useSSL=false&zeroDateTimeBehavior=convertToNull&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: ${MYSQL_USERNAME:dlink}
-    password: ${MYSQL_PASSWORD:dlink}
+    url: jdbc:mysql://${MYSQL_ADDR:172.18.11.224:3306}/${MYSQL_DATABASE:dlink_dev}?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&useSSL=false&zeroDateTimeBehavior=convertToNull&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:dlink_dev}
+    password: ${MYSQL_PASSWORD:dlink_dev}
     driver-class-name: com.mysql.cj.jdbc.Driver
   application:
     name: dlink

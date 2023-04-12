@@ -19,6 +19,7 @@
 
 package com.dlink.service.impl;
 
+import cn.hutool.json.JSONObject;
 import com.dlink.alert.Alert;
 import com.dlink.alert.AlertConfig;
 import com.dlink.alert.AlertMsg;
@@ -40,6 +41,7 @@ import com.dlink.db.service.impl.SuperServiceImpl;
 import com.dlink.dto.SqlDTO;
 import com.dlink.dto.TaskRollbackVersionDTO;
 import com.dlink.dto.TaskVersionConfigureDTO;
+import com.dlink.dto.UserDTO;
 import com.dlink.exception.BusException;
 import com.dlink.explainer.lineage.LineageBuilder;
 import com.dlink.explainer.lineage.LineageResult;
@@ -136,9 +138,15 @@ import java.util.stream.Collectors;
 
 import javax.annotation.Resource;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -157,6 +165,7 @@ import cn.hutool.core.lang.tree.Tree;
 import cn.hutool.core.lang.tree.TreeNode;
 import cn.hutool.core.lang.tree.TreeUtil;
 import cn.hutool.core.util.StrUtil;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * 任务 服务实现类
@@ -248,13 +257,41 @@ public class TaskServiceImpl extends SuperServiceImpl<TaskMapper, Task> implemen
         JobManager jobManager = JobManager.build(config);
         process.start();
         if (!config.isJarTask()) {
-            JobResult jobResult = jobManager.executeSql(task.getStatement());
+            UserDTO userDTO = (UserDTO) StpUtil.getSession().get("user");
+            String username=userDTO.getUser().getUsername();
+            String queuename=GetFlinkQueue(username);
+            JobResult jobResult = jobManager.executeSqldcqc(task.getStatement(),queuename);
             process.finish("Submit Flink SQL finished.");
             return jobResult;
         } else {
             JobResult jobResult = jobManager.executeJar();
             process.finish("Submit Flink Jar finished.");
             return jobResult;
+        }
+    }
+
+    private String GetFlinkQueue(String username){
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            RestTemplate restTemplate = new RestTemplate();
+            String url = "http://172.18.11.225:8888/api/rest_j/v1/user/getQueue";
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
+                    .queryParam("username", username);
+            HttpEntity<?> entity = new HttpEntity<>(headers);
+            HttpEntity<String> response = restTemplate.exchange(
+                    builder.build().encode().toUri(),
+                    HttpMethod.GET,
+                    entity,
+                    String.class);
+            String body = response.getBody();
+            JSONObject jsonObject = new JSONObject(body);
+            String flinkqueue=jsonObject.getJSONObject("data").get("queue").toString();
+            if(flinkqueue.equals(null)){
+                flinkqueue="default";
+            }
+            return flinkqueue;
+        } catch (Exception e) {
+            return "default";
         }
     }
 
@@ -321,7 +358,10 @@ public class TaskServiceImpl extends SuperServiceImpl<TaskMapper, Task> implemen
         JobConfig config = buildJobConfig(task);
         JobManager jobManager = JobManager.build(config);
         if (!config.isJarTask()) {
-            return jobManager.executeSql(task.getStatement());
+            UserDTO userDTO = (UserDTO) StpUtil.getSession().get("user");
+            String username=userDTO.getUser().getUsername();
+            String queuename=GetFlinkQueue(username);
+            return jobManager.executeSqldcqc(task.getStatement(),queuename);
         } else {
             return jobManager.executeJar();
         }

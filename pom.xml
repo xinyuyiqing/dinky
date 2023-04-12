@@ -59,6 +59,7 @@
         <scala.binary.version>2.12</scala.binary.version>
         <scala.version>2.12.10</scala.version>
         <!--  `provided` for product environment ,`compile` for dev environment  -->
+        <!--scope.runtime>provided</scope.runtime-->
         <scope.runtime>provided</scope.runtime>
         <dlink.flink.version>1.14</dlink.flink.version>
         <spring-boot-dependencies.version>2.6.13</spring-boot-dependencies.version>
@@ -881,6 +882,13 @@
                             <artifactId>build-helper-maven-plugin</artifactId>
                             <version>1.7</version>
                         </plugin>
+
+
+                        <plugin>
+                            <groupId>org.codehaus.mojo</groupId>
+                            <artifactId>build-helper-maven-plugin</artifactId>
+                            <version>1.7</version>
+                        </plugin>
                         <plugin>
                             <groupId>org.apache.maven.plugins</groupId>
                             <artifactId>maven-shade-plugin</artifactId>
@@ -927,6 +935,7 @@
                                 </additionalJOptions>
                             </configuration>
                         </plugin>
+
                     </plugins>
                 </pluginManagement>
 

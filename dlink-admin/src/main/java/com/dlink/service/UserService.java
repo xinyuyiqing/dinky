@@ -19,6 +19,7 @@
 
 package com.dlink.service;
 
+import com.alibaba.fastjson.JSONObject;
 import com.dlink.common.result.Result;
 import com.dlink.db.service.ISuperService;
 import com.dlink.dto.LoginUTO;
@@ -47,6 +48,8 @@ public interface UserService extends ISuperService<User> {
     boolean removeUser(Integer id);
 
     Result loginUser(LoginUTO loginUTO);
+
+    Result dcqcloginUser(JSONObject token);
 
     User getUserByUsername(String username);
 

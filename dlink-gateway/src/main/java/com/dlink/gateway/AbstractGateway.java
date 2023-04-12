@@ -72,6 +72,11 @@ public abstract class AbstractGateway implements Gateway {
     }
 
     @Override
+    public GatewayResult submitJobGraphdcqc(JobGraph jobGraph,String queuename) {
+        throw new GatewayException("Couldn't deploy Flink Cluster with job graph.");
+    }
+
+    @Override
     public GatewayResult submitJar() {
         throw new GatewayException("Couldn't deploy Flink Cluster with User Application Jar.");
     }
