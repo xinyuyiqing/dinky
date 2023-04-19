@@ -1,8 +1,5 @@
-zwdd:
-  appkey: glz-hO8Z9q068KIi9rg3Hkl4NbQzIb
-  appsecret: AqL35oaVoV3SyW815ky0t0K23oU004umAD5le1LI
-  domainName: zd-openplatform.bigdatacq.com
-
+queue:
+  api: http://172.16.94.78:8188/api/rest_j/v1/user/getQueue
 spring:
   datasource:
     url: jdbc:mysql://${MYSQL_ADDR:172.18.11.224:3306}/${MYSQL_DATABASE:dlink_dev}?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&useSSL=false&zeroDateTimeBehavior=convertToNull&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true

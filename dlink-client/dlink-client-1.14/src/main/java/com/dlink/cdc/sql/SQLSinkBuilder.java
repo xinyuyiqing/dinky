@@ -84,7 +84,7 @@ import javax.xml.bind.DatatypeConverter;
 public class SQLSinkBuilder extends AbstractSinkBuilder implements Serializable {
 
     public static final String KEY_WORD = "sql";
-    private static final long serialVersionUID = -3699685106324048226L;
+    private static final long serialVersionUID = 7422918130120111103L;
     private static AtomicInteger atomicInteger = new AtomicInteger(0);
     private ZoneId sinkTimeZone = ZoneId.of("UTC");
 

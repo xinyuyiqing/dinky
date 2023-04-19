@@ -219,6 +219,8 @@ public class TaskServiceImpl extends SuperServiceImpl<TaskMapper, Task> implemen
     private String password;
     @Value("${server.port}")
     private String serverPort;
+    @Value("${queue.api}")
+    private String queueapi;
 
     @Autowired
     private UDFService udfService;
@@ -274,7 +276,7 @@ public class TaskServiceImpl extends SuperServiceImpl<TaskMapper, Task> implemen
         try {
             HttpHeaders headers = new HttpHeaders();
             RestTemplate restTemplate = new RestTemplate();
-            String url = "http://172.18.11.225:8888/api/rest_j/v1/user/getQueue";
+            String url = queueapi;
             UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
                     .queryParam("username", username);
             HttpEntity<?> entity = new HttpEntity<>(headers);

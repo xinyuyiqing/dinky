@@ -32,6 +32,7 @@
         <module>dlink-alert-wechat</module>
         <module>dlink-alert-feishu</module>
         <module>dlink-alert-email</module>
+        <module>dlink-alert-zwdingding</module>
     </modules>
 
     <properties>

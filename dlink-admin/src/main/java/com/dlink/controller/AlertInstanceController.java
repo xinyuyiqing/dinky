@@ -26,10 +26,6 @@ import com.dlink.common.result.Result;
 import com.dlink.model.AlertInstance;
 import com.dlink.service.AlertInstanceService;
 
-import com.dlink.service.impl.ZWDingDingAlarmImpl;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -56,8 +52,6 @@ public class AlertInstanceController {
     @Autowired
     private AlertInstanceService alertInstanceService;
 
-    @Autowired
-    private ZWDingDingAlarmImpl zwDingDingAlarm;
 
     /**
      * 新增或者更新
@@ -118,13 +112,4 @@ public class AlertInstanceController {
         }
     }
 
-    @PostMapping("/ykz")
-    public Result send() {
-        Boolean st=zwDingDingAlarm.send("305481","测试文件");
-        if (st.equals(true)) {
-            return Result.succeed("发送成功");
-        } else {
-            return Result.failed("发送失败");
-        }
-    }
 }

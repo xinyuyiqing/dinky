@@ -1,19 +1,16 @@
-package com.dlink.service.impl;
+package com.dlink.alert.zwdingding;
 
 import com.alibaba.xxpt.gateway.shared.api.request.OapiGovDingIsvSendJsonRequest;
 import com.alibaba.xxpt.gateway.shared.api.response.OapiGovDingIsvSendJsonResponse;
 import com.alibaba.xxpt.gateway.shared.client.http.ExecutableClient;
 import com.alibaba.xxpt.gateway.shared.client.http.IntelligentPostClient;
-
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
-
 
 
 /**
@@ -24,15 +21,13 @@ import java.util.Collections;
 
 @Slf4j
 @Component("zwDingDingAlarm")
-public class ZWDingDingAlarmImpl{
-    @Value("${zwdd.appkey}")
-    private String appkey;
+public class ZwDingDingSender {
 
-    @Value("${zwdd.appsecret}")
-    private String appsecret;
+    private String appkey="glz-hO8Z9q068KIi9rg3Hkl4NbQzIb";
 
-    @Value("${zwdd.domainName}")
-    private String domainName;
+    private String appsecret="AqL35oaVoV3SyW815ky0t0K23oU004umAD5le1LI";
+
+    private String domainName="zd-openplatform.bigdatacq.com";
 
     @Autowired
     @Lazy

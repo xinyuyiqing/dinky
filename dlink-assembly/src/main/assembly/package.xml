@@ -244,6 +244,14 @@
             </includes>
         </fileSet>
         <fileSet>
+            <directory>${project.parent.basedir}/dlink-alert/dlink-alert-zwdingding/target
+            </directory>
+            <outputDirectory>lib</outputDirectory>
+            <includes>
+                <include>dlink-alert-zwdingding-${project.version}.jar</include>
+            </includes>
+        </fileSet>
+        <fileSet>
             <directory>${project.parent.basedir}/dlink-doc/extends</directory>
             <outputDirectory>jar</outputDirectory>
             <includes>
